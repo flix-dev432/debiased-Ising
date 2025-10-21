@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: $USER-ising-estimation-
+  labels:
+    eidf/user: $USER
+    kueue.x-k8s.io/queue-name: $INFK8S_QUEUE_NAME
+    kueue.x-k8s.io/priority-class: batch-workload-priority
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        eidf/user: $USER
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: huggingface
+        image: huggingface/transformers-pytorch-gpu:latest
+        imagePullPolicy: IfNotPresent
+        workingDir: "/workspace"
+        command: ["/bin/bash", "./2d_ising_est_eidf/run_ising_est.sh"]
+        env:
+          - name: WANDB_API_KEY
+            value: 
+        resources:
+           limits:
+            nvidia.com/gpu: 4
+            cpu: 8
+            memory: 48Gi
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+          - name: publicdata
+            mountPath: /public
+            readOnly: true
+          - name: shm-volume
+            mountPath: /dev/shm
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A100-SXM4-40GB
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+             claimName: $USER-ws1
+        - name: publicdata
+          nfs:
+            server: $INFK8S_NFS_SERVER_IP
+            path: /public
+        - name: shm-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
